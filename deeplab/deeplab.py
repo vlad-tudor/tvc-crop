@@ -1,7 +1,10 @@
 import os
+import numpy as np
 import torch
-from PIL import Image
+import cv2
 from torchvision import transforms
+from image_utils.normalise_images import preprocess_image
+from PIL import Image
 
 class DeepLabV3:
     def __init__(self):
@@ -16,17 +19,8 @@ class DeepLabV3:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
-    def preprocess_image(self, image_path):
-        input_image = Image.open(image_path)
-        input_image = input_image.convert("RGB")
-        preprocess = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-        return preprocess(input_image).unsqueeze(0), input_image.size
-
     def infer(self, image_path):
-        input_batch, original_size = self.preprocess_image(image_path)
+        input_batch, original_size = preprocess_image(image_path)
         input_batch = input_batch.to(self.device)
 
         # Perform inference
@@ -34,7 +28,65 @@ class DeepLabV3:
             output = self.model(input_batch)['out'][0]
         output_predictions = output.argmax(0)
 
-        # Resize output to match original image size
+        # Add a dummy batch dimension, resize, then remove the dummy batch dimension
+        output_predictions = output_predictions.unsqueeze(0)  # Add dummy batch dimension
         output_resized = transforms.functional.resize(output_predictions, original_size[::-1], interpolation=transforms.InterpolationMode.NEAREST)
+        output_resized = output_resized.squeeze(0)  # Remove dummy batch dimension
 
         return output_resized
+
+    def find_deeplab_bounding_box(self, deeplab_output):
+        """
+        Find the bounding box around all features found by DeepLabV3.
+        """
+        # Convert the output to a numpy array
+        output_np = deeplab_output.byte().cpu().numpy()
+
+        # Find contours and the bounding box
+        contours, _ = cv2.findContours(output_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if not contours:
+            return 0, 0, 0, 0  # No contours found
+
+        x, y, w, h = cv2.boundingRect(contours[0])
+        x_max, y_max = x + w, y + h
+
+        for cnt in contours[1:]:
+            x1, y1, w1, h1 = cv2.boundingRect(cnt)
+            x_max = max(x_max, x1 + w1)
+            y_max = max(y_max, y1 + h1)
+            x, y = min(x, x1), min(y, y1)
+
+        w, h = x_max - x, y_max - y
+        return x, y, w, h
+
+    def process_image(self, image_path):
+        """
+        Process an image using DeepLabV3 and return the bounding box.
+        """
+        deeplab_output = self.infer(image_path)
+        return self.find_deeplab_bounding_box(deeplab_output)
+    
+    def process_image(self, image_path):
+        deeplab_output = self.infer(image_path)
+        bbox = self.find_deeplab_bounding_box(deeplab_output)
+        return bbox
+    
+    def save_output(self, image_path, output_path):
+        """
+        Save the output of the DeepLabV3 model processing with emphasized non-black areas.
+        """
+        deeplab_output = self.infer(image_path)
+
+        # Normalize the output to emphasize non-black areas
+        output_normalized = deeplab_output.byte().cpu().numpy()
+        min_val = np.min(output_normalized[output_normalized > 0])  # Minimum non-zero value
+        max_val = np.max(output_normalized)
+        output_normalized = (output_normalized - min_val) / (max_val - min_val) * 255
+        output_normalized[output_normalized < 0] = 0  # Ensure no negative values
+
+        # Convert the normalized output to an image format
+        output_image = Image.fromarray(output_normalized.astype(np.uint8))
+
+        # Save the image
+        output_image.save(output_path)

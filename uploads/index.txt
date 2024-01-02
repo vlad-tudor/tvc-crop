@@ -1,0 +1,1 @@
+Contains the uploaded image, deleted after processed.

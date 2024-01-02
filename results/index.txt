@@ -1,0 +1,1 @@
+Contains model/cropping results. Files in here are deleted, but the folder should exist

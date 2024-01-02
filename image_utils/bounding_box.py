@@ -1,36 +1,6 @@
 # image_utils/bounding_box.py
 import cv2
-import numpy as np
 
-def find_saliency_bounding_box(saliency_map, tolerance=0):
-    """
-    Find the bounding box from the saliency map with an optional tolerance.
-    
-    :param saliency_map: The saliency map from which to find the bounding box.
-    :param tolerance: Number of pixels to expand the bounding box in all directions.
-    :return: A tuple (x, y, w, h) representing the bounding box.
-    """
-    # Convert to numpy array and apply threshold
-    saliency_np = (saliency_map.squeeze().cpu().numpy() * 255).astype(np.uint8)
-    saliency_np = cv2.threshold(saliency_np, 128, 255, cv2.THRESH_BINARY)[1]
-
-    # Optionally apply blur
-    saliency_np = cv2.GaussianBlur(saliency_np, (5, 5), 0)
-
-    # Find contours and the bounding box
-    contours, _ = cv2.findContours(saliency_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    x, y, w, h = cv2.boundingRect(contours[0])
-    for cnt in contours[1:]:
-        x1, y1, w1, h1 = cv2.boundingRect(cnt)
-        x, y, w, h = min(x, x1), min(y, y1), max(x+w, x1+w1) - x, max(y+h, y1+h1) - y
-
-    # Apply tolerance
-    x = max(x - tolerance, 0)
-    y = max(y - tolerance, 0)
-    w = min(w + 2 * tolerance, saliency_map.shape[-1] - x)
-    h = min(h + 2 * tolerance, saliency_map.shape[-2] - y)
-
-    return x, y, w, h
 
 def find_deeplab_bounding_box(deeplab_output):
     """
@@ -41,14 +11,20 @@ def find_deeplab_bounding_box(deeplab_output):
 
     # Find contours and the bounding box
     contours, _ = cv2.findContours(output_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
     if not contours:
         return 0, 0, 0, 0  # No contours found
 
     x, y, w, h = cv2.boundingRect(contours[0])
+    x_max, y_max = x + w, y + h
+
     for cnt in contours[1:]:
         x1, y1, w1, h1 = cv2.boundingRect(cnt)
-        x, y, w, h = min(x, x1), min(y, y1), max(x+w, x1+w1) - x, max(y+h, y1+h1) - y
+        x_max = max(x_max, x1 + w1)
+        y_max = max(y_max, y1 + h1)
+        x, y = min(x, x1), min(y, y1)
 
+    w, h = x_max - x, y_max - y
     return x, y, w, h
 
 def consolidate_bounding_boxes(boxes):

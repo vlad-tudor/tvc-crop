@@ -1,7 +1,4 @@
-env/*
 env
 models
 */__pycache__
 __pycache__
-images
-results
