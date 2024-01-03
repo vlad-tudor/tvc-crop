@@ -71,19 +71,20 @@ class DeepLabV3:
         deeplab_output = self.infer(image_path)
         bbox = self.find_deeplab_bounding_box(deeplab_output)
         return bbox
-    
+
     def save_output(self, image_path, output_path):
-        """
-        Save the output of the DeepLabV3 model processing with emphasized non-black areas.
-        """
         deeplab_output = self.infer(image_path)
 
         # Normalize the output to emphasize non-black areas
         output_normalized = deeplab_output.byte().cpu().numpy()
-        min_val = np.min(output_normalized[output_normalized > 0])  # Minimum non-zero value
+        min_val = np.min(output_normalized[output_normalized > 0]) if np.any(output_normalized > 0) else 0
         max_val = np.max(output_normalized)
-        output_normalized = (output_normalized - min_val) / (max_val - min_val) * 255
-        output_normalized[output_normalized < 0] = 0  # Ensure no negative values
+
+        if max_val - min_val > 0:
+            output_normalized = (output_normalized - min_val) / (max_val - min_val) * 255
+        else:
+            # Handle the case where max_val equals min_val (e.g., uniform array)
+            output_normalized = np.zeros_like(output_normalized)  # or set to a default value
 
         # Convert the normalized output to an image format
         output_image = Image.fromarray(output_normalized.astype(np.uint8))
