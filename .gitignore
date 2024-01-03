@@ -1,4 +1,16 @@
+.DS_Store
+
 env
-models
+
 */__pycache__
 __pycache__
+
+models/*
+!models/index.txt
+
+results/*
+!results/index.txt
+
+uploads/*
+!uploads/index.txt
+
