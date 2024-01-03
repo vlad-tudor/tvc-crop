@@ -13,7 +13,7 @@ def download_deeplabv3():
     print("DeepLabV3 model downloaded.")
 
 def download_basnet():
-    file_id = '1s52ek_4YTDRt_EOkx1FS53u-vJa0c4nu'
+  
     basnet_dir = 'models/basnet'  # Directory where the model will be saved
     basnet_path = os.path.join(basnet_dir, 'basnet.pth')
 
@@ -22,6 +22,7 @@ def download_basnet():
         os.makedirs(basnet_dir)
 
     # Download the file
+    file_id = '1s52ek_4YTDRt_EOkx1FS53u-vJa0c4nu'
     gdown.download(url=f'https://drive.google.com/uc?id={file_id}', output=basnet_path, quiet=False)
     print("BASNet model downloaded.")
 
